@@ -1,0 +1,136 @@
+---
+title: "GrpWk2_Econometrics"
+author: "Group 3B"
+date: "10/13/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+We calculate the equilibrium FX for US Dollar/Naira for the monthly average exchange rate. The data is derived from <https://www.cbn.gov.ng/rates/exrate.asp>.
+
+```{r}
+# load packages and data
+library(readxl)
+library(vars)
+library(timeSeries)
+library(rugarch)
+```
+
+ 
+```{r}
+# import the dataset
+nairadolrates <- read_excel("MonthlyAverageExhRate13102020.xlsx", sheet = "MonthlyAverageExhRate13102020")
+```
+
+```{r}
+acf(nairadolrates$`BDC (USD)`)
+```
+The above plot shows that the data is not stationary, hence, we make it stationary by making a first differencing i,e integrated of order 1.
+
+```{r}
+# find changes in interest rates by differencing:
+diffnairausd <- diff(nairadolrates$`BDC (USD)`,trim=TRUE)
+diffnairausd2 <- diff(nairadolrates$`IFEM (USD)`,trim=TRUE)
+
+dnairausd = cbind(diffnairausd, diffnairausd2)
+```
+
+
+The autocorrelation function plot below shows a stationary differenced data.
+```{r}
+acf(diffnairausd)
+```
+```{r}
+# simple correlations:
+cor(dnairausd)
+```
+From the correlation table above, we have that the two rates are weakly correlated.
+```{r}
+# estimate a Vector Auto Regression
+VAR_model <- VAR(dnairausd, lag.max=12, type = "none", ic = "AIC")
+summary(VAR_model)
+```
+We try to use a impulse response function to interpret the table given above. Since the variables are quite many and we would like to observe the rule of parsimony.
+
+```{r}
+VAR_irf <- irf(VAR_model, n.ahead = 13,boot = TRUE, ci = 0.95)
+plot(VAR_irf)
+```
+The above shows that the variables oscillates around the mean readily irrespective of whether a strong flunctuation is noticed or not.
+```{r}
+# lag order suggested by AIC
+
+VAR_model$p
+```
+According to the above AIC, we have a lag order 9.
+
+
+```{r}
+# Cointegration Analysis
+library(urca)
+library(tsDyn)
+```
+
+```{r}
+# store the various  monthly exchange rates:
+BDC <- nairadolrates$`BDC (USD)`
+IFEM <- nairadolrates$`IFEM (USD)`
+
+rates = cbind(BDC, IFEM)
+```
+
+```{r}
+# Johansen test
+jotest1=ca.jo(rates, type="eigen", K=9, ecdet="none", spec="longrun")
+summary(jotest1)
+```
+With the 10$\%$ test above, $r=1$
+```{r warning=FALSE}
+VECM_fit = VECM(rates,1,r = 1, include = "const",estim = "ML", LRinclude ="none")
+summary(VECM_fit)
+```
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

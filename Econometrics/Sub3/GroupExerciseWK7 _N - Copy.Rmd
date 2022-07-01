@@ -1,0 +1,405 @@
+---
+title: "GroupExerciseWK7"
+author: "Olusegun Ajibola"
+date: "10/27/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Extracting Tesla historical data (closing price) from Yahoo Finance.
+```{r}
+library("quantmod")
+```
+
+```{r}
+getSymbols("TSLA",src="yahoo")
+tesla<- TSLA[,"TSLA.Close"]
+# tesla
+```
+Extracting Tesla data between two specified dates
+
+```{r}
+tesla<- tesla[(index(tesla) >= "2019-06-03" & index(tesla) <= "2020-10-14"),]
+# tesla
+```
+
+```{r}
+plot(tesla)
+title("Momentum Chart")
+```
+
+Calculating daily returns using closing prices
+
+```{r}
+return_tesla<-Delt(tesla, k=1)
+plot(return_tesla)
+abline(h=0, col="red")
+# return_tesla
+```
+
+# Momentum Trading and Backtesting
+
+In the backtesting strategy we split the data in two smaller datasets:
+
+- In-sample dataset (consisting of 75$\%$ of the data)
+- Out-sample dataset (25$\%$ of the data)
+
+From our data "tesla", we have 347 days of trading, hence take 75$\%$ of this for our in-sample data, and the remaining 25$\%$ for out-sample data.
+
+We indicate the start and end dates for in-sample and out-sample periods.
+
+```{r}
+# MEANING of ACRONYMS
+# in_sd -> in-sample data starts
+# in_ed -> in-sample data ends
+# 
+# out_sd -> out-sample data starts
+# in_ed -> in-sample data ends
+```
+
+```{r}
+in_sd<- "2019-06-03"
+in_ed<- "2020-06-11"
+out_sd<- "2020-06-12"
+out_ed<- "2020-10-14"
+```
+We take 260 days for our in-sample data and 87days for the out-sample data.
+
+```{r}
+# MEANING of ACRONYMS
+# in_tesla -> the Tesla closing price for in-sample period
+# in_return_tesla -> the Tesla return for in-sample period
+```
+
+```{r}
+in_tesla<- tesla[(index(tesla) >= in_sd& index(tesla) <= in_ed),]
+# in_tesla
+```
+
+
+```{r}
+in_return_tesla<- return_tesla[(index(return_tesla) >= in_sd& index(return_tesla) <= in_ed),]
+# in_return_tesla
+```
+
+The split helps to avoid human bias towards parameter estimation.
+```{r}
+# MEANING of ACRONYMS
+# out_tesla -> the Tesla closing price for out-sample period
+# out_return_tesla -> the Tesla return for out-sample period
+```
+
+
+```{r}
+out_tesla<- tesla[(index(tesla) >= out_sd& index(tesla) <= out_ed),]
+# out_tesla
+```
+
+```{r}
+out_return_tesla<- return_tesla[(index(return_tesla) >= out_sd& index(return_tesla) <= out_ed),]
+# out_return_tesla
+```
+We generate automated trading signals using:
+1.    Moving average convergence divergence (MACD
+2.    Bollinger band indicators
+
+
+Step 1: MACD parameters can be adjusted considering the trading strategy.
+
+```{r}
+macd<- MACD(in_tesla, nFast =12, nSlow = 26, nSig = 9, maType="SMA", percent= FALSE)
+bollinger_band<- BBands(in_tesla, n = 20, maType="SMA", sd = 2)
+```
+
+The trading strategy is based on the following outcomes:
+• Signal is initialized with NULL
+• If DJI > upper Bollinger band and MACD value > MACD signal -> Buy signal (1)
+• If DJI < lower Bollinger band and MACD value < MACD signal -> Sell signal (-1)
+• Out of the market -> signal 0
+
+```{r}
+signal<-NULL
+```
+
+
+```{r}
+signal <- ifelse(in_tesla> bollinger_band[,'up'] &macd[,'macd']>macd[,'signal'],1,ifelse(in_tesla< bollinger_band[,'dn'] &macd[,'macd']<macd[,'signal'],-1,0))
+```
+
+```{r}
+# the signal output is gotten here
+# lag(signal)
+```
+
+Step 2: Trade return is calculated using the following code:
+```{r}
+trade_return <- in_return_tesla*lag(signal)
+# trade_return
+```
+
+Step 3: We check the strategy performance using the PerformanceAnalytics package
+```{r}
+library(PerformanceAnalytics)
+```
+
+Step 4: The cumulative return is calculated using:
+```{r}
+cumm_return<- Return.cumulative(trade_return)
+cumm_return
+```
+Step 5: The annualized return is calculated as follows:
+```{r}
+annual_return<- Return.annualized(trade_return)
+annual_return
+```
+Step 6: Charts.PerformanceSummary plots cumulative and daily returns along with drawdown at a given point of time.
+```{r}
+charts.PerformanceSummary(trade_return)
+```
+
+Comments regarding charts:
+
+  a.    Cumulative returns are positive at the end of in-sample period, which means the strategy is profitable.
+  b.    The strategy is yet to be tested for the out-sample period. As a result, we cannot come to a conclusion yet.
+  c.    Looking at the daily returns chart and the cummulative returns, there are  few periods of high and low volatility.
+  
+Step 7: The details about the trade performance are provided by the summary function:
+
+```{r}
+summary(as.ts(trade_return))
+```
+
+The maximum drawdown is calculated, it is gotten to be 34.44$\%$.
+```{r}
+maxDrawdown(trade_return)
+```
+Daily and annualized standard deviations are calculated for trade returns.
+```{r}
+StdDev(trade_return)
+```
+
+```{r}
+StdDev.annualized(trade_return)
+```
+Value-at-Risk (VaR) is calculated
+```{r}
+VaR(trade_return, p = 0.95)
+```
+
+The Sharpe ratio on a daily and annualized basis is calculated.
+```{r}
+SharpeRatio(as.ts(trade_return), Rf = 0, p = 0.95, FUN = "StdDev")
+```
+
+```{r}
+SharpeRatio.annualized(trade_return, Rf = 0)
+```
+# Out-sample data analysis
+
+The trading strategy above provides good results for in-sample data. The strategy is now tested for out-sample data.
+
+Step 8: Moving average and Bollinger bands are calculated for out-sample data using the following
+```{r}
+macd<- MACD(out_tesla, nFast = 7, nSlow = 12, nSig = 15,maType="SMA", percent = FALSE)
+bollinger_band <- BBands(out_tesla, n = 20, maType="SMA", sd = 2)
+```
+
+Step 9: Signals are generated for out-sample data.
+
+```{r}
+signal <- NULL
+signal <- ifelse(out_tesla> bollinger_band[,'up'] &macd[,'macd']>macd[,'signal'],1,ifelse(out_tesla< bollinger_band[,'dn'] &macd[,'macd']<macd[,'signal'],-1,0))
+```
+Step 10: Trade return is calculated using the following code:
+```{r}
+trade_return<- out_return_tesla*lag(signal)
+```
+
+Step 11: The cumulative return is calculated using:
+```{r}
+cumm_ret<- Return.cumulative(trade_return)
+cumm_ret
+```
+Step 12: The annualized return is calculated as follows:
+```{r}
+annual_ret<- Return.annualized(trade_return)
+annual_ret
+```
+Step 13: Charts.PerformanceSummary plots cumulative and daily returns along with drawdown at a given point of time.
+```{r}
+charts.PerformanceSummary(trade_return)
+```
+Comments on the charts:
+
+  a.    The cumulative returns offered no loss or gain until 17 August, 2020 were a gain was made. We can conclude that our strategy is profitability for Tesla stocks within the time period under study.
+  b.    Although the strategy is basic as it relies only on technical indicators. We improve this strategy later on by implementing an ARMA/GARCH model forecasts.
+
+Step 14: The details about the trade performance are provided by the summary function:
+
+```{r}
+summary(as.ts(trade_return))
+```
+The maximum drawdown is calculated, it is gotten to be 6.33$\%$.
+```{r}
+maxdd<- maxDrawdown(trade_return)
+maxdd
+```
+Daily and annualized standard deviations are calculated for trade returns.
+```{r}
+sd<- StdDev(trade_return)
+sd
+```
+
+```{r}
+sda<- StdDev.annualized(trade_return)
+sda
+```
+Value-at-Risk (VaR) is calculated:
+```{r}
+VaR(trade_return, p = 0.95)
+```
+The Sharpe ratio on a daily and annualized basis is calculated.
+```{r}
+SharpeRatio(as.ts(trade_return), Rf = 0, p = 0.95, FUN = "StdDev")
+```
+
+
+```{r}
+SharpeRatio.annualized(trade_return, Rf = 0)
+```
+
+# Implementing ARMA/GARCH forecast models
+
+We have already visualized Tesla stocks earlier, we know that its patterns are non-stationary.
+
+```{r message=FALSE}
+library(tidyverse)
+library(stats)
+library(readxl)
+library(tseries)
+library(forecast)
+```
+
+
+
+```{r}
+# Convert the data frame to a time series object
+tsla <-  ts(tesla)
+```
+
+```{r}
+# construct the acf & pacf plot
+Acf(tsla)
+```
+The ACF plot shows a very slow decay, we need to difference the data in order to attain some level of stationarity. whereas in the PACF plot, we have an instant cutoff, with notable impact in the 10th lag.
+
+```{r}
+tsla_diff <- diff(tsla, differences =1 )
+```
+
+```{r}
+Acf(tsla_diff)
+Pacf(tsla_diff)
+```
+Now, we have a stationary time series from the ACF plot. Visualizations are not enough, we carry out an Augmented Dickey-Fuller Test, to test for a null of non-stationarity against an alternative of stationarity.
+
+```{r}
+adf.test(tsla_diff)
+```
+From the above, we have that at a 1$\%$ level, we reject the null hypothesis of non-stationarity.
+
+
+We can now fit our model.
+# ARMA Model FItting and Evaluation
+
+```{r}
+# fit a simple AR model with 18 lags, no differencing, no moving average terms – i.e. an ARIMA(18,0,0) model:
+
+AR_model1 <- arima(tsla_diff, order = c(18,0,0), method = "ML")
+summary(AR_model1)
+```
+None of the coefficients above are statistically significant. Hence, the model is not parsimonious.
+
+
+We now check if the model has white noise.
+```{r}
+Box.test(AR_model1$residuals, lag = 18)
+```
+Since the p-value is 1, a simple AR model can capture our analysis. Hence, we do not reject the null hypothesis that the errors are white noise.
+
+```{r}
+ARIMA_model <- arima(tsla_diff, order=c(15,0,1), method = "ML")
+summary(ARIMA_model)
+Box.test(ARIMA_model$residuals, lag = 15)
+```
+This new model is not any way better than the previous. Now, we go ahead to forecast with the initial model.
+
+```{r}
+#FORECASTING
+AR_model <- ar(tsla,order=18)
+AR_forecast <- predict(AR_model,n.ahead= 63,se.fit=TRUE)
+```
+
+The predicted value of the series are:
+```{r}
+AR_forecast$pred
+```
+Earlier, the number of trading days was 347, now a prediction was made for 63 days i.e. the number of trading days in 3 months.
+
+The standard errors are given as:
+```{r}
+AR_forecast$se
+```
+We will use this to plot the predicted values along with our uncertainty about those forecasts.
+
+```{r}
+plot(tsla)
+lines(AR_forecast$pred,col="darkblue")
+lines(AR_forecast$pred+2*AR_forecast$se,col="darkred",lty = "dashed")
+lines(AR_forecast$pred-2*AR_forecast$se,col="darkred",lty = "dashed")
+```
+```{r}
+autoplot(forecast(AR_model))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

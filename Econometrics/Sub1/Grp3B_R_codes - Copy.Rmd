@@ -1,0 +1,269 @@
+---
+title: "R Code Solutions: Basic Statistics, Linear Regression Task and Univariate Time Series"
+author: "Authors: "
+date: " 9/28/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+**(20/09) MScFE 610 Econometrics (C20-S3) Timezone Group 3 - B**
+
+# Basic Statistics
+
+We load the JPM data:
+
+```{r}
+library(readxl) #loads the readxl package
+JPM_01 <- read_excel("JPM.xlsx", 
+                  col_types = c("date", "numeric", "numeric", 
+                                "numeric", "numeric", "numeric", 
+                                "numeric"))
+View(JPM_01)
+```
+We now calculate the average stock value. It is the mean of the adjusted closing price.
+```{r}
+adj_close = JPM_01$'Adj Close'
+Avg_stkvalue = mean(adj_close)
+```
+This is the average stock value:
+```{r}
+Avg_stkvalue   
+```
+To obtain daily stock returns:
+```{r}
+library(tidyquant)  #loads the tidyquant package
+library(timetk)  #loads the timetk package
+jpm_daily_returns <- JPM_01 %>%
+  tq_transmute(select = 'Adj Close',           # this specifies which column to select   
+               mutate_fun = periodReturn,   # This specifies what to do with that column
+               period = "daily",      # This argument calculates Daily returns
+               type = "log",   #does the calculation with natural log
+               col_rename = "adj_cls_price") # renames the column
+```
+To get every value in daily stock return:
+```{r}
+daily_stock_returns = jpm_daily_returns$`adj_cls_price`
+daily_stock_returns #This is the daily stock return
+```
+To calculate the stock volatility, we first compute the daily percentage stock return:
+```{r}
+for (i in daily_stock_returns)
+{percent_return = daily_stock_returns[i] * 100
+}
+percent_return
+```
+Secondly, we estimate the standard deviation of the percentage return:
+```{r}
+standard_dev_return = sd(percent_return)
+standard_dev_return
+```
+Lastly, we calculate the volatility as given below:
+```{r}
+volat = standard_dev_return * sqrt(229)
+volat  #This is the stock volatility
+```
+
+# Linear Regression
+We import the datasets as Comma Separated Value (CSV) files as required.
+
+```{r, message = FALSE}
+library(readr)
+
+#import S&P 500 data
+SP <- read_csv("GSPC.csv")
+
+#rename the "Adj Close" for S&P 500 data
+SP$Adjclosesp <- SP$`Adj Close`
+View(SP)
+```
+
+```{r message = FALSE}
+
+#import JP Morgan data
+JPM <- read_csv("JPM.csv")
+
+#rename the "Adj Close" for JP Morgan data
+JPM$Adjclosejp <- JPM$`Adj Close`
+View(JPM)
+```
+
+We now make a plot of our data to ensure that there exists a linear relationship between the variables in concern.
+```{r}
+plot(x = SP$Adjclosesp, y = JPM$Adjclosejp)
+```
+From the above graph, it is evident that there exists a linear relationship between the adjusted close price of both the JP Morgan and S $\&$ P 500 data.
+
+We now advance by building our linear model.
+```{r}
+model <- lm(JPM$Adjclosejp ~ SP$Adjclosesp)
+
+# We call the coefficient of our model with this:
+model
+```
+From the coefficients above, we have that:
+
+$\text{JPMorgan Price} = 13.286 +0.0329\times \text{S and P Price index}$.
+
+The above equation has a semblance of $y = \alpha +\beta\times x$, where $\alpha$ is the constant coefficient and $\beta$ is the coefficient of the S and P Price.
+
+```{r}
+summary(model)
+```
+From the above model summary, the probabilities of the t-values shows us that both coefficients are significant. The exception here is that the coefficient of the intercept is significant at $95\%$ confidence interval.
+
+The R-squared value of $0.5788$ shows that $\approx 57.9\%$ of the change/variation in the JPMorgan price is explained by the  S $\&$ P price.
+
+Finally, the F-statistics with value $311.9$ and a very small p-value close to zero $(0)$ shows that the explanatory variable (i.e S $\&$ P adjusted close price) and the explained variable (i.e JPMorgan Stock price adjusted) is different from zero $(0)$. Hence, we reject the null hypothesis that the variables are insignificant.
+
+# 3.0 Univariate Time Series
+Importing the data:
+```{r}
+chdata <- read.csv("CSUSHPISA.csv")
+```
+Date is not well formated.
+```{r}
+chdata$DATE= as.Date(chdata$DATE)
+```
+
+```{r, tseries}
+data.ts<-ts(chdata$CSUSHPISA,frequency=12, start=c(1987,1,1))
+```
+
+Fitting and forecasting the ARMA model. We first plot our data to have a rough idea what we are dealing with.
+```{r}
+library(ggfortify)
+
+# A line plot to directly visualize the data in concern
+autoplot(data.ts) +
+  xlab("Year") + ylab("Case-Shiller Index series.")
+```
+The data covered the dates January 1987 to June 2020. 
+
+From the graph above, it is evident that there has been a continuous rise in the Home Price Index with a significant depression between 2006 to 2013 before picking up again till recent time (i.e June 2020).
+
+Plotting the ACF plot of the series:
+```{r}
+data.acf <- acf(data.ts)
+```
+We now have to difference the data because looking at the ACF plot, we notice the data is finding it difficult to decay to zero which shows that the data is not stationary.
+```{r}
+# two order differencing.
+diff_data <- diff(data.ts, differences = 2)
+```
+
+```{r}
+# autocorrelation function plot
+acf(diff_data)
+```
+From the above, we now see that stationarity exists, we now proceed with making the corresponding pacf plot. 
+```{r}
+# partial autocorrelation function plot
+pacf(diff_data)
+```
+
+We now fit an ARMA model of order (p,q) = (15,1)
+
+```{r}
+library(tseries)
+adf.test(diff_data)
+```
+To confirm the stationarity level of the differennced data we used Augumented Dicky fuller test result above.
+
+## Fitting the ARMA model
+```{r}
+library(forecast)
+ARMAmodel<- arima(diff_data, order=c(15,0,1)) 
+```
+
+Model Summary:
+```{r}
+ARMAmodel
+```
+Predicting the ARMA Model
+```{r}
+forcast <- forecast(ARMAmodel)
+forcast
+```
+
+We now  plot our forecasr "forcast."
+```{r}
+autoplot(forecast(ARMAmodel))
+```
+# Augumented Dicky Fuller (ADF) Test
+```{r}
+adf.test(data.ts)
+```
+## Interpretation of ADF
+Based on the result of the ADF test, it was obvious that the p-value of the test is 0.1207 which is less than the 0.05. 
+According to the selection criterion we accept the null hypothesis.
+## Decision Rule
+The Cash Shriller Index is not Stationary and it will be of our best interest to find a way to stationalize it before fitting the model.  
+## Implimenting Arima Model
+### Implimenting Box Jenkins for model order selection 
+
+```{r}
+acf(diff_data)
+```
+
+```{r}
+pacf(diff_data)
+```
+We used the ACF and PACF plot to determine the order of the arima model.
+Note that the order of differencing of the model i.e "d" is 2. 
+this was based on the fact that we differenced the data twice to make it stationary before fitting the model. 
+
+The ACF plot shows after the first spike the model started to decay to zero. 
+This shows the MA of order 1. 
+
+Also, we observed that there was no spike that crosses the line until the 3rd lag while other decays to zero.Therefore we decided to select an AR of order 3.
+
+The order to be used for this model is (3,2,1).
+
+```{r}
+library(forecast)
+ARIMAmodel<-arima(diff_data, order=c(3,2,1))
+```
+
+```{r}
+ARIMAmodel
+```
+
+```{r}
+cast <- forecast(ARIMAmodel)
+cast
+```
+## Checking for the model Adequacy
+```{r}
+ggtsdiag(ARIMAmodel)
+```
+## Forecasting the Arima Model
+```{r}
+arima_fut <-autoplot(forecast(ARIMAmodel))
+arima_fut
+```
+## Predicting ARMA model for the next 3 years i.e future evolution 
+```{r}
+pred_fut <-autoplot(forecast(ARMAmodel))
+pred_fut
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
